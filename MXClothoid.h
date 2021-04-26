@@ -11,6 +11,9 @@
 #include "Clothoid.h"
 
 #define PI 3.14159265358979323846264338328
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
+#define ANGLE_DIR(a, b) ((a >= 0.0f) ? 0 : (b == 0 ? 0 : 1))    //0: right, 1, left
+#define ANGLE_SIGN(a) ((a == 0) ? -1 : 1)
 
 namespace MXClothoid{
 
@@ -85,38 +88,6 @@ namespace MXClothoid{
         return temp;
     }
 
-    double getCoefficient(double startCurvature, double endCurvature, double length, int sign, Coordinates c1, Coordinates c2){
-        double ASQ = fabs(length / (endCurvature - startCurvature));
-        double La = ASQ * startCurvature;
-        double Le = ASQ * endCurvature;
-
-        double tempx0 = integral(cosFunction, 0, La, ASQ);
-        double tempy0 = integral(sinFunction, 0, La, ASQ);
-
-        double tempx1 = integral(cosFunction, 0, Le, ASQ);
-        double tempy1 = integral(sinFunction, 0, Le, ASQ);
-
-        double a1 = atan2(c2.y - c1.y, c2.x - c1.x);
-        double a2 = atan2(sign * tempy1 - sign * tempy0, tempx1 - tempx0);
-        //double a3 = atan2(sign * tempy0 - sign * tempy1, tempx0 - tempx1);
-        double angle = a1 - a2;
-
-        double X00  = (tempx0 * cos(angle) - (sign * tempy0) * sin(angle));
-        double Y00  = (tempx0 * sin(angle) + (sign * tempy0) * cos(angle));
-
-        double X01  = (tempx1 * cos(angle) - (sign * tempy1) * sin(angle));
-        double Y01  = (tempx1 * sin(angle) + (sign * tempy1) * cos(angle));
-
-        double X0000 = X01 - X00;
-        double Y0000 = Y01 - Y00;
-
-        double X0001 = c2.x - c1.x;
-        double Y0001 = c2.y - c1.y;
-
-        double coefficient = (X0001 / X0000 +  Y0001 / Y0000) / 2;
-        return coefficient;
-    }
-
     Coordinates calcOriginCoordinates(int originX, int originY, int dx, int dy){
         Coordinates coordinates;
         coordinates.x = originX + dx * 32;
@@ -125,27 +96,65 @@ namespace MXClothoid{
         return coordinates;
     }
 
-    int getSign(double startCurvature, double endCurvature, double tangentArcStart, double tangentArcEnd){
-        int sign = 0;
-        double angleStart = 90.0f - ((double)tangentArcStart * 360.0f / 65535);
-        while (angleStart < 0)
-            angleStart = angleStart + 360;
-        double angleEnd = 90.0f - ((double)tangentArcEnd * 360.0f / 65535);
-        while (angleEnd < 0)
-            angleEnd = angleEnd + 360;
-        std::cout<< "tangentArcStart: "<<angleStart<<std::endl;
-        std::cout<< "tangentArcEnd: "<<angleEnd<<std::endl;
+    int convertCurvatureToProtocol(float curvature) {
+        static const float sgCurvatureConvertTable[] = {
+                0.9329005,0.7415425,0.5174103,0.3524464,0.2462423,0.1785520,0.1341612,0.1039609,
+                0.0826743,0.0671898,0.0556131,0.0467509,0.0398266,0.0343195,0.0298710,0.0262284,
+                0.0232093,0.0206800,0.0185407,0.0167154,0.0151458,0.0137865,0.0126017,0.0115628,
+                0.0106469,0.0098354,0.0091130,0.0084671,0.0078875,0.0073652,0.0068931,0.0064649,
+                0.0060753,0.0057198,0.0053945,0.0050962,0.0048220,0.0045693,0.0043359,0.0041200,
+                0.0039197,0.0037337,0.0035606,0.0033993,0.0032487,0.0031078,0.0029759,0.0028523,
+                0.0027362,0.0026270,0.0025242,0.0024273,0.0023359,0.0022496,0.0021679,0.0020907,
+                0.0020175,0.0019480,0.0018821,0.0018195,0.0017599,0.0017032,0.0016492,0.0015978,
+                0.0015487,0.0015018,0.0014570,0.0014142,0.0013733,0.0013341,0.0012966,0.0012606,
+                0.0012261,0.0011930,0.0011612,0.0011307,0.0011014,0.0010732,0.0010460,0.0010199,
+                0.0009947,0.0009705,0.0009471,0.0009246,0.0009029,0.0008819,0.0008616,0.0008420,
+                0.0008231,0.0008049,0.0007872,0.0007701,0.0007536,0.0007375,0.0007220,0.0007070,
+                0.0006924,0.0006783,0.0006646,0.0006513,0.0006384,0.0006259,0.0006138,0.0006020,
+                0.0005905,0.0005794,0.0005686,0.0005580,0.0005478,0.0005378,0.0005282,0.0005188,
+                0.0005096,0.0005006,0.0004919,0.0004834,0.0004752,0.0004671,0.0004593,0.0004516,
+                0.0004442,0.0004369,0.0004298,0.0004229,0.0004161,0.0004095,0.0004030,0.0003967,
+                0.0003906,0.0003846,0.0003787,0.0003730,0.0003674,0.0003619,0.0003566,0.0003513,
+                0.0003462,0.0003412,0.0003363,0.0003315,0.0003268,0.0003222,0.0003177,0.0003132,
+                0.0003089,0.0003047,0.0003006,0.0002965,0.0002925,0.0002886,0.0002848,0.0002811,
+                0.0002774,0.0002738,0.0002703,0.0002668,0.0002634,0.0002601,0.0002568,0.0002536,
+                0.0002504,0.0002473,0.0002443,0.0002413,0.0002384,0.0002355,0.0002327,0.0002299,
+                0.0002272,0.0002245,0.0002219,0.0002193,0.0002168,0.0002143,0.0002118,0.0002094,
+                0.0002071,0.0002048,0.0002025,0.0002002,0.0001980,0.0001958,0.0001937,0.0001916,
+                0.0001895,0.0001875,0.0001855,0.0001835,0.0001816,0.0001797,0.0001778,0.0001759,
+                0.0001741,0.0001723,0.0001705,0.0001688,0.0001671,0.0001654,0.0001637,0.0001621,
+                0.0001605,0.0001589,0.0001573,0.0001558,0.0001543,0.0001528,0.0001513,0.0001498,
+                0.0001484,0.0001470,0.0001456,0.0001442,0.0001429,0.0001416,0.0001403,0.0001390,
+                0.0001377,0.0001364,0.0001351,0.0001339,0.0001327,0.0001315,0.0001303,0.0001292,
+                0.0001280,0.0001269,0.0001258,0.0001247,0.0001236,0.0001225,0.0001214,0.0001204,
+                0.0001194,0.0001183,0.0001173,0.0001163,0.0001153,0.0001144,0.0001134,0.0001125,
+                0.0001116,0.0001107,0.0001097,0.0001088,0.0001080,0.0001071,0.0001062,0.0001053,
+                0.0001045,0.0001036,0.0001028,0.0001020,0.0001012,0.0001004,0.0000500,0.0000000,
+        };
 
-        if (startCurvature < endCurvature && angleStart > angleEnd)
-            sign = -1;
-        else if (startCurvature < endCurvature && angleStart < angleEnd)
-            sign = 1;
-        else if (startCurvature > endCurvature && (angleStart > angleEnd))
-            sign = -1;
-        else if (startCurvature > endCurvature && (angleStart < angleEnd))
-            sign = 1;
-        std::cout<< "sign: "<<sign<<std::endl;
-        return sign;
+        int l = -1;
+        int r = ARRAY_SIZE(sgCurvatureConvertTable);
+
+
+        while (l < r - 1) {
+            int m = (l + r) / 2;
+            if (curvature < sgCurvatureConvertTable[m]) {
+                l = m;
+            } else {
+                r = m;
+            }
+        }
+        return (r >= 0 && r < ARRAY_SIZE(sgCurvatureConvertTable)) ? r : 255;
+    }
+
+    double calcBranchAngle(int32_t angle_A, int32_t angle_B){
+        float branch_angle = (angle_B - angle_A) * 360.0f / 65535;
+        if (branch_angle > 180.0f) {
+            return branch_angle - 360.0f;
+        } else if (branch_angle < -180.0f) {
+            return branch_angle + 360.0f;
+        }
+        return branch_angle;
     }
 
     double calcEndTangentArc(double startCurvature, double endCurvature, double length, int sign, double tangentArc){

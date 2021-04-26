@@ -49,6 +49,39 @@ namespace testClothoid{
         return vecCoordinates;
     }
 
+    ///计算地图经纬度比例
+    double getCoefficient(double startCurvature, double endCurvature, double length, int sign, MXClothoid::Coordinates c1, MXClothoid::Coordinates c2){
+        double ASQ = fabs(length / (endCurvature - startCurvature));
+        double La = ASQ * startCurvature;
+        double Le = ASQ * endCurvature;
+
+        double tempx0 = MXClothoid::integral(MXClothoid::cosFunction, 0, La, ASQ);
+        double tempy0 = MXClothoid::integral(MXClothoid::sinFunction, 0, La, ASQ);
+
+        double tempx1 = MXClothoid::integral(MXClothoid::cosFunction, 0, Le, ASQ);
+        double tempy1 = MXClothoid::integral(MXClothoid::sinFunction, 0, Le, ASQ);
+
+        double a1 = atan2(c2.y - c1.y, c2.x - c1.x);
+        double a2 = atan2(sign * tempy1 - sign * tempy0, tempx1 - tempx0);
+        //double a3 = atan2(sign * tempy0 - sign * tempy1, tempx0 - tempx1);
+        double angle = a1 - a2;
+
+        double X00  = (tempx0 * cos(angle) - (sign * tempy0) * sin(angle));
+        double Y00  = (tempx0 * sin(angle) + (sign * tempy0) * cos(angle));
+
+        double X01  = (tempx1 * cos(angle) - (sign * tempy1) * sin(angle));
+        double Y01  = (tempx1 * sin(angle) + (sign * tempy1) * cos(angle));
+
+        double X0000 = X01 - X00;
+        double Y0000 = Y01 - Y00;
+
+        double X0001 = c2.x - c1.x;
+        double Y0001 = c2.y - c1.y;
+
+        double coefficient = (X0001 / X0000 +  Y0001 / Y0000) / 2;
+        return coefficient;
+    }
+
     //验证DB
     void calcCoordinates(int startCurvature, int endCurvature, double length, double tangentArcStart,
             double tangentArcEnd, int npts, MXClothoid::Coordinates c1, MXClothoid::Coordinates c2){
@@ -58,13 +91,30 @@ namespace testClothoid{
         }
         double sgStartCurvature = fabs(MXClothoid::getcurvature(startCurvature));
         double sgEndCurvature = fabs(MXClothoid::getcurvature(endCurvature));
-        int sign = MXClothoid::getSign(sgStartCurvature, sgEndCurvature, tangentArcStart, tangentArcEnd);
+        //计算左旋还是右旋
+        int branchAngleDirection = 0;
+        if (sgStartCurvature < sgEndCurvature){
+            //第一缓和曲线
+            //计算角度差
+            double branch_angle = MXClothoid::calcBranchAngle(tangentArcStart, tangentArcEnd);
+            int tmp = MXClothoid::convertCurvatureToProtocol(sgStartCurvature);
+            branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        }else{
+            //第二缓和曲线
+            //计算角度差
+            double branch_angle = MXClothoid::calcBranchAngle(tangentArcEnd, tangentArcStart);
+            int tmp = MXClothoid::convertCurvatureToProtocol(sgEndCurvature);
+            branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        }
+        int sign = ANGLE_SIGN(branchAngleDirection);
+        //计算地图缩放比例
         double coefficient = getCoefficient(sgStartCurvature, sgEndCurvature, length, sign, c1, c2);
         std::vector<MXClothoid::Coordinates> veccoord;
         double angle = 0.0;
         veccoord.clear();
         std::cout<<"-----------------通过起点终点坐标计算----------------------"<<std::endl;
         if (sgStartCurvature < sgEndCurvature){
+            //计算独立坐标相对偏转角度,用于坐标转换
             angle = MXClothoid::calcStartAngle(sgStartCurvature, sgEndCurvature, length, sign, c1, c2);
             veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
             for (int i = 0; i < veccoord.size(); i++) {
@@ -72,6 +122,7 @@ namespace testClothoid{
             }
         }
         else{
+            //计算独立坐标相对偏转角度,用于坐标转换
             angle = MXClothoid::calcEndAngle(sgStartCurvature, sgEndCurvature, length, sign, c1, c2);
             veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
             for (int i = 0; i < veccoord.size(); i++) {
@@ -82,6 +133,7 @@ namespace testClothoid{
         std::cout<<"-----------------通过切线方位角度计算----------------------"<<std::endl;
         veccoord.clear();
         if (sgStartCurvature < sgEndCurvature){
+            //计算独立坐标相对偏转角度,用于坐标转换
             angle = MXClothoid::calcAngleByStartTangentArc(sgStartCurvature, sgEndCurvature, length, sign, tangentArcStart);
             veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
             for (int i = 0; i < veccoord.size(); i++) {
@@ -89,6 +141,7 @@ namespace testClothoid{
             }
         }
         else{
+            //计算独立坐标相对偏转角度,用于坐标转换
             angle = MXClothoid::calcAngleByEndTangentArc(sgStartCurvature, sgEndCurvature, length, sign, tangentArcEnd);
             veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
             for (int i = 0; i < veccoord.size(); i++) {
@@ -96,25 +149,6 @@ namespace testClothoid{
             }
         }
         std::cout<<"========================================================"<<std::endl;
-    }
-
-    void testAngle(int startCurvature, int endCurvature, double length, double tangentArcStart, double tangentArcEnd){
-        if(startCurvature == endCurvature){
-            std::cout<<"起点曲率不能等于终点曲率!!!"<<std::endl;
-            return;
-        }
-        double sgStartCurvature = fabs(MXClothoid::getcurvature(startCurvature));
-        double sgEndCurvature = fabs(MXClothoid::getcurvature(endCurvature));
-        int sign = MXClothoid::getSign(sgStartCurvature, sgEndCurvature, tangentArcStart, tangentArcEnd);
-        double ang1 = (90.0f - ((double)tangentArcStart * 360.0f / 65535));
-        while (ang1 < 0)
-            ang1 = ang1 + 360.0f;
-        double ang2 = (90.0f - ((double)tangentArcEnd * 360.0f / 65535));
-        while (ang2 < 0)
-            ang2 = ang2 + 360.0f;
-        std::cout<<"ArcStart_diff:"<<ang2 - ang1<<std::endl;
-        double end_ang = MXClothoid::calcEndTangentArc(sgStartCurvature, sgEndCurvature, length, sign, tangentArcStart);
-        std::cout<<"end_ang:"<<end_ang<<std::endl;
     }
 
     void test1(){
@@ -128,14 +162,15 @@ namespace testClothoid{
         int enddx = -22;
         int enddy = -6;
 
-        int sign = 1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 780;       //开始曲率
         int endCurvature = 215;         //结束曲率
+        double tangentArcStart = 13392;
+        double tangentArcEnd = 12611;
         double length = 34;             //长度 m
-        std::cout<< "sign: "<<sign<<std::endl;
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
+        calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
     }
 
     void test2(){
@@ -149,14 +184,15 @@ namespace testClothoid{
         int enddx = 0;
         int enddy = -2;
 
-        int sign = -1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 160;       //开始曲率
         int endCurvature = 154;         //结束曲率
+        double tangentArcStart = 12611;
+        double tangentArcEnd = 55159;
         double length = 60;             //长度 m
-        std::cout<< "sign: "<<sign<<std::endl;
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
+        calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
     }
 
     void test3(){
@@ -170,14 +206,15 @@ namespace testClothoid{
         int enddx = -1;
         int enddy = -1;
 
-        int sign = -1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 178;       //开始曲率
         int endCurvature = 798;         //结束曲率
+        double tangentArcStart = 55159;
+        double tangentArcEnd = 53346;
         double length = 24;             //长度 m
-        std::cout<< "sign: "<<sign<<std::endl;
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
+        calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
     }
 
     void test4(){
@@ -198,7 +235,6 @@ namespace testClothoid{
         double tangentArcStart = 64023;
         double tangentArcEnd = 3682;
         double length = 21;             //长度 m
-        //testAngle(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd);
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
         calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
@@ -222,7 +258,6 @@ namespace testClothoid{
         double tangentArcStart = 3682;
         double tangentArcEnd = 8700;
         double length = 18;             //长度 m
-
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
         calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
@@ -239,16 +274,15 @@ namespace testClothoid{
         int enddx = -4;
         int enddy = 4;
 
-        int sign = 1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 205;       //开始曲率
         int endCurvature = 118;         //结束曲率
         double tangentArcStart = 31145;
         double tangentArcEnd = 22789;
         double length = 17;             //长度 m
-        std::cout<< "sign: "<<sign<<std::endl;
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
+        calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
     }
 
     void test7(){
@@ -262,14 +296,15 @@ namespace testClothoid{
         int enddx = -1;
         int enddy = -1;
 
-        int sign = -1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 116;       //开始曲率
         int endCurvature = 236;         //结束曲率
+        double tangentArcStart = 8191;
+        double tangentArcEnd = 65409;
         double length = 17;             //长度 m
-        std::cout<< "sign: "<<sign<<std::endl;
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
+        calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
     }
 
     void test8(){
@@ -283,14 +318,12 @@ namespace testClothoid{
         int enddx = -6;
         int enddy = -7;
 
-        //int sign = -1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 696;       //开始曲率
         int endCurvature = 897;         //结束曲率
         double tangentArcStart = 4082;
         double tangentArcEnd = 7445;
         double length = 9;             //长度 m
-        testAngle(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd);
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
         calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
@@ -307,14 +340,12 @@ namespace testClothoid{
         int enddx = -3;
         int enddy = -1;
 
-        int sign = 1;                   //左旋为-1  ----测试发现左旋是 +1 右旋是-1
         int node = 5;                   //分成等份
         int startCurvature = 900;       //开始曲率
         int endCurvature = 897;         //结束曲率
         double tangentArcStart = 7445;
         double tangentArcEnd = 24736;
         double length = 25;             //长度 m
-        std::cout<< "sign: "<<sign<<std::endl;
         MXClothoid::Coordinates coord1 = MXClothoid::calcOriginCoordinates(startX, startY, startdx, startdy);
         MXClothoid::Coordinates coord2 = MXClothoid::calcOriginCoordinates(endX, endY, enddx, enddy);
         calcCoordinates(startCurvature, endCurvature, length, tangentArcStart, tangentArcEnd, node, coord1, coord2);
