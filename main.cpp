@@ -6,8 +6,8 @@ int main() {
     //testClothoid::test2();
     //testClothoid::test3();
 
-    testClothoid::test4();
-    //testClothoid::test5();
+    //testClothoid::test4();
+    testClothoid::test5();
 
     //testClothoid::test6();
     //testClothoid::test7();

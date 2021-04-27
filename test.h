@@ -9,6 +9,7 @@
 #include <cmath>
 #include <iomanip>
 #include <vector>
+#include <fstream>
 #include "Clothoid.h"
 #include "MXClothoid.h"
 
@@ -82,6 +83,138 @@ namespace testClothoid{
         return coefficient;
     }
 
+    //通过起始点坐标进行计算
+    void calcCoordinates1(double startCurvature, double endCurvature, double tangentArcStart,
+                          double tangentArcEnd, MXClothoid::Coordinates c1, MXClothoid::Coordinates c2,
+                          double length, int npts){
+        //计算左旋还是右旋
+        int branchAngleDirection = 0;
+        if (startCurvature < endCurvature){
+            //第一缓和曲线
+            //计算角度差
+            double branch_angle = MXClothoid::calcBranchAngle(tangentArcStart, tangentArcEnd);
+            int tmp = MXClothoid::convertCurvatureToProtocol(startCurvature);
+            branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        }else{
+            //第二缓和曲线
+            //计算角度差
+            double branch_angle = MXClothoid::calcBranchAngle(tangentArcEnd, tangentArcStart);
+            int tmp = MXClothoid::convertCurvatureToProtocol(endCurvature);
+            branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        }
+        int sign = ANGLE_SIGN(branchAngleDirection);
+        //计算地图缩放比例
+        double coefficient = getCoefficient(startCurvature, endCurvature, length, sign, c1, c2);
+
+        std::vector<MXClothoid::Coordinates> veccoord;
+        double angle = 0.0;
+        std::ofstream outFile;
+        outFile.open("../data.csv", std::ios::app|std::ios::out);
+        if (startCurvature < endCurvature){
+            //计算独立坐标相对偏转角度,用于坐标转换
+            angle = MXClothoid::calcStartAngle(startCurvature, endCurvature, length, sign, c1, c2);
+            veccoord = MXClothoid::calcClothoidCoordinates(startCurvature, endCurvature, length, npts, sign, angle);
+            for (int i = 0; i < veccoord.size(); i++) {
+                double x = c1.x + veccoord[i].x * coefficient;
+                double y = c1.y + veccoord[i].y * coefficient;
+                outFile << std::setprecision(15)<< x << ',' << std::setprecision(15)<< y << std::endl;
+                std::cout<<i <<","<< std::setprecision(15) << x <<","<<std::setprecision(15) << y << "," << i << std::endl;
+            }
+        }
+        else{
+            //计算独立坐标相对偏转角度,用于坐标转换
+            angle = MXClothoid::calcEndAngle(startCurvature, endCurvature, length, sign, c1, c2);
+            veccoord = MXClothoid::calcClothoidCoordinates(startCurvature, endCurvature, length, npts, sign, angle);
+            for (int i = 0; i < veccoord.size(); i++) {
+                double x = c2.x + veccoord[i].x * coefficient;
+                double y = c2.y + veccoord[i].y * coefficient;
+                outFile << std::setprecision(15)<< x << ',' << std::setprecision(15)<< y << std::endl;
+                std::cout<<i <<","<< std::setprecision(15) << x <<","<<std::setprecision(15) << y << "," << i << std::endl;
+            }
+        }
+        outFile.close();
+    }
+
+    ///通过切线方位角计算
+    void calcCoordinates2(double startCurvature, double endCurvature, double tangentArcStart,
+                          double tangentArcEnd, MXClothoid::Coordinates c1, MXClothoid::Coordinates c2,
+                          double length, int npts){
+        //计算左旋还是右旋
+        int branchAngleDirection = 0;
+        if (startCurvature < endCurvature){
+            //第一缓和曲线
+            //计算角度差
+            double branch_angle = MXClothoid::calcBranchAngle(tangentArcStart, tangentArcEnd);
+            int tmp = MXClothoid::convertCurvatureToProtocol(startCurvature);
+            branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        }else{
+            //第二缓和曲线
+            //计算角度差
+            double branch_angle = MXClothoid::calcBranchAngle(tangentArcEnd, tangentArcStart);
+            int tmp = MXClothoid::convertCurvatureToProtocol(endCurvature);
+            branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        }
+        int sign = ANGLE_SIGN(branchAngleDirection);
+        //计算地图缩放比例
+        double coefficient = getCoefficient(startCurvature, endCurvature, length, sign, c1, c2);
+
+        std::vector<MXClothoid::Coordinates> veccoord;
+        std::ofstream outFile;
+        outFile.open("../data.csv", std::ios::app|std::ios::out);
+        if (startCurvature < endCurvature){
+            //计算独立坐标相对偏转角度,用于坐标转换
+            double angle = MXClothoid::calcAngleByStartTangentArc(startCurvature, endCurvature, length, sign, tangentArcStart);
+            veccoord = MXClothoid::calcClothoidCoordinates(startCurvature, endCurvature, length, npts, sign, angle);
+            for (int i = 0; i < veccoord.size(); i++) {
+                double x = c1.x + veccoord[i].x * coefficient;
+                double y = c1.y + veccoord[i].y * coefficient;
+                outFile << std::setprecision(15)<< x << ',' << std::setprecision(15)<< y << std::endl;
+                std::cout<<i <<","<< std::setprecision(15) << x <<","<<std::setprecision(15) << y << "," << i << std::endl;
+            }
+        }
+        else{
+            //计算独立坐标相对偏转角度,用于坐标转换
+            double angle = MXClothoid::calcAngleByEndTangentArc(startCurvature, endCurvature, length, sign, tangentArcEnd);
+            veccoord = MXClothoid::calcClothoidCoordinates(startCurvature, endCurvature, length, npts, sign, angle);
+            for (int i = 0; i < veccoord.size(); i++) {
+                double x = c2.x + veccoord[i].x * coefficient;
+                double y = c2.y + veccoord[i].y * coefficient;
+                outFile << std::setprecision(15)<< x << ',' << std::setprecision(15)<< y << std::endl;
+                std::cout<<i <<","<< std::setprecision(15) << x <<","<<std::setprecision(15) << y << "," << i << std::endl;
+            }
+        }
+        outFile.close();
+    }
+
+    //第二缓和曲线也当做第一缓和曲线计算
+    void calcCoordinates3(double startCurvature, double endCurvature, double tangentArcStart,
+                          double tangentArcEnd, MXClothoid::Coordinates c1, MXClothoid::Coordinates c2,
+                          double length, int npts){
+        int branchAngleDirection = 0;
+        //计算角度差
+        double branch_angle = MXClothoid::calcBranchAngle(tangentArcStart, tangentArcEnd);
+        int tmp = MXClothoid::convertCurvatureToProtocol(startCurvature);
+        //计算左旋还是右旋
+        branchAngleDirection = ANGLE_DIR(branch_angle, tmp);  //0: right, 1, left
+        int sign = ANGLE_SIGN(branchAngleDirection);
+        //计算地图缩放比例
+        double coefficient = getCoefficient(startCurvature, endCurvature, length, sign, c1, c2);
+
+        std::vector<MXClothoid::Coordinates> veccoord;
+        std::ofstream outFile;
+        outFile.open("../data.csv", std::ios::app|std::ios::out);
+        //计算独立坐标相对偏转角度,用于坐标转换
+        double angle = MXClothoid::calcAngleByStartTangentArc(startCurvature, endCurvature, length, sign, tangentArcStart);
+        veccoord = MXClothoid::calcClothoidCoordinates(startCurvature, endCurvature, length, npts, sign, angle);
+        for (int i = 0; i < veccoord.size(); i++) {
+            double x = c1.x + veccoord[i].x * coefficient;
+            double y = c1.y + veccoord[i].y * coefficient;
+            outFile << std::setprecision(15)<< x << ',' << std::setprecision(15)<< y << std::endl;
+            std::cout<<i <<","<< std::setprecision(15) << x <<","<<std::setprecision(15) << y << "," << i << std::endl;
+        }
+        outFile.close();
+    }
+
     //验证DB
     void calcCoordinates(int startCurvature, int endCurvature, double length, double tangentArcStart,
             double tangentArcEnd, int npts, MXClothoid::Coordinates c1, MXClothoid::Coordinates c2){
@@ -113,41 +246,12 @@ namespace testClothoid{
         double angle = 0.0;
         veccoord.clear();
         std::cout<<"-----------------通过起点终点坐标计算----------------------"<<std::endl;
-        if (sgStartCurvature < sgEndCurvature){
-            //计算独立坐标相对偏转角度,用于坐标转换
-            angle = MXClothoid::calcStartAngle(sgStartCurvature, sgEndCurvature, length, sign, c1, c2);
-            veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
-            for (int i = 0; i < veccoord.size(); i++) {
-                std::cout<<"P" <<i<<": "<< std::setprecision(15) <<c1.x + veccoord[i].x * coefficient<<";"<<std::setprecision(15) <<c1.y + veccoord[i].y * coefficient << std::endl;
-            }
-        }
-        else{
-            //计算独立坐标相对偏转角度,用于坐标转换
-            angle = MXClothoid::calcEndAngle(sgStartCurvature, sgEndCurvature, length, sign, c1, c2);
-            veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
-            for (int i = 0; i < veccoord.size(); i++) {
-                std::cout<<"P" <<i<<": "<< std::setprecision(15) <<c2.x + veccoord[i].x * coefficient<<";"<<std::setprecision(15) <<c2.y + veccoord[i].y * coefficient << std::endl;
-            }
-        }
+        calcCoordinates1(sgStartCurvature, sgEndCurvature, tangentArcStart, tangentArcEnd,
+                         c1, c2, length, npts);
 
         std::cout<<"-----------------通过切线方位角度计算----------------------"<<std::endl;
-        veccoord.clear();
-        if (sgStartCurvature < sgEndCurvature){
-            //计算独立坐标相对偏转角度,用于坐标转换
-            angle = MXClothoid::calcAngleByStartTangentArc(sgStartCurvature, sgEndCurvature, length, sign, tangentArcStart);
-            veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
-            for (int i = 0; i < veccoord.size(); i++) {
-                std::cout<<"P" <<i<<": "<< std::setprecision(15) <<c1.x + veccoord[i].x * coefficient<<";"<<std::setprecision(15) <<c1.y + veccoord[i].y * coefficient << std::endl;
-            }
-        }
-        else{
-            //计算独立坐标相对偏转角度,用于坐标转换
-            angle = MXClothoid::calcAngleByEndTangentArc(sgStartCurvature, sgEndCurvature, length, sign, tangentArcEnd);
-            veccoord = MXClothoid::calcClothoidCoordinates(sgStartCurvature, sgEndCurvature, length, npts, sign, angle);
-            for (int i = 0; i < veccoord.size(); i++) {
-                std::cout<<"P" <<i<<": "<< std::setprecision(15) <<c2.x + veccoord[i].x * coefficient<<";"<<std::setprecision(15) <<c2.y + veccoord[i].y * coefficient << std::endl;
-            }
-        }
+        calcCoordinates2(sgStartCurvature, sgEndCurvature, tangentArcStart, tangentArcEnd,
+                c1, c2, length, npts);
         std::cout<<"========================================================"<<std::endl;
     }
 
@@ -229,7 +333,7 @@ namespace testClothoid{
         int enddy = -1;
 
        // int sign = -1;                   //右转方位角减小 -1 左转方位角减小 -1
-        int node = 5;                   //分成等份
+        int node = 10;                   //分成等份
         int startCurvature = 262;       //开始曲率
         int endCurvature = 884;         //结束曲率
         double tangentArcStart = 64023;
@@ -252,7 +356,7 @@ namespace testClothoid{
         int enddy = -1;
 
         //int sign = 1;                   //右转方位角减小 -1 左转方位角减小 -1
-        int node = 5;                   //分成等份
+        int node = 10;                   //分成等份
         int startCurvature = 892;       //开始曲率
         int endCurvature = 307;         //结束曲率
         double tangentArcStart = 3682;
