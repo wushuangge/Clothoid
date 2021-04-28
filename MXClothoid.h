@@ -10,7 +10,8 @@
 #include <vector>
 #include "Clothoid.h"
 
-#define PI 3.14159265358979323846264338328
+#define PI 3.14159265358979323846264338328          // pi
+#define PI_2 6.28318530717958647692528676656        // 2*pi
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
 #define ANGLE_DIR(a, b) ((a >= 0.0f) ? 0 : (b == 0 ? 0 : 1))    //0: right, 1, left
 #define ANGLE_SIGN(a) ((a == 0) ? -1 : 1)
@@ -157,28 +158,21 @@ namespace MXClothoid{
         return branch_angle;
     }
 
-    double calcEndTangentArc(double startCurvature, double endCurvature, double length, int sign, double tangentArc){
+    double calcClothoidBranchAngle(double startCurvature, double endCurvature, double length, int sign){
         double asquare = fabs(length / (endCurvature - startCurvature));
         double La = asquare * startCurvature;
         double Le = asquare * endCurvature;
-
-        double beta1 = sign * pow(La, 2)/(2 * asquare) * 180.0f / PI;     //p 点切线方位角
-        while (beta1 < 0)
-            beta1 = beta1 + 360.0f;
-
-        double beta2 = sign * pow(Le, 2)/(2 * asquare) * 180.0f / PI;     //p 点切线方位角
-        while (beta2 < 0)
-            beta2 = beta2 + 360.0f;
-
-        std::cout<< "beta_diff: "<<beta2 - beta1<<std::endl;
-        double ang = (90.0f - ((double)tangentArc * 360.0f / 65535));
-        while (ang < 0)
-            ang = ang + 360.0f;
-
-        double angle = ang - beta1 + beta2;
-        while (angle < 0)
-            angle = angle + 360.0f;
-        return angle;
+        double beta1 = sign * pow(La, 2)/(2 * asquare);     //p 点切线方位角
+        while (beta1 < 0){
+            beta1 = beta1 + PI_2;
+        }
+        double beta2 = sign * pow(Le, 2)/(2 * asquare);     //p 点切线方位角
+        while (beta2 < 0){
+            beta2 = beta2 + PI_2;
+        }
+        double diff = beta2 - beta1;
+        std::cout<< "diff: "<<diff<<std::endl;
+        return diff;
     }
 
     double calcStartAngle(double startCurvature, double endCurvature, double length, int sign, Coordinates c1, Coordinates c2){
@@ -192,7 +186,7 @@ namespace MXClothoid{
         double a2= atan2(sign * tempy, tempx);
         double angle = a1 - a2;     //a1 - a2 表示 独立坐标按线路旋转的角度
         while (angle < 0)
-            angle = angle + 2 * PI;
+            angle = angle + PI_2;
         std::cout<<"angle: "<<(angle*180/PI)<<std::endl;
         return angle;
     }
@@ -215,33 +209,31 @@ namespace MXClothoid{
         double a3 = atan2(sign * tempy2 - sign * tempy1, tempx2 - tempx1);
         double angle = a1 - a3;     //a1 - a2 表示 独立坐标按线路旋转的角度
         while (angle < 0)
-            angle = angle + 2 * PI;
+            angle = angle + PI_2;
         std::cout<<"angle: "<<(angle*180/PI)<<std::endl;
         return angle;
     }
 
-    double calcAngleByStartTangentArc(double startCurvature, double endCurvature, double length, int sign, double tangentArc){
-        double ang = (90.0f - ((double)tangentArc * 360.0f / 65535)) * PI / 180.0f;
+    double calcAngleByStartTangentArc(double startCurvature, double endCurvature, double length, int sign, double ang){
         double asquare = fabs(length / (endCurvature - startCurvature));
         double La = asquare * startCurvature;
         double beta = sign * pow(La, 2)/(2 * asquare);
         double angle = ang - beta;
         while (angle < 0)
-            angle = angle + 2 * PI;
+            angle = angle + PI_2;
         std::cout<<"angle: "<<(angle*180/PI)<<std::endl;
         return angle;
     }
 
-    double calcAngleByEndTangentArc(double startCurvature, double endCurvature, double length, int sign, double tangentArc){
-        double ang = (90.0f - ((double)tangentArc * 360.0f / 65535)) * PI / 180.0f + PI;
+    double calcAngleByEndTangentArc(double startCurvature, double endCurvature, double length, int sign, double ang){
         double asquare = fabs(length / (endCurvature - startCurvature));
         double Le = asquare * endCurvature;
         double beta = sign * pow(Le, 2)/(2 * asquare);
         while (beta < 0)
-            beta = beta + 2 * PI;
-        double angle = ang - beta;
+            beta = beta + PI_2;
+        double angle = ang + PI - beta;
         while (angle < 0)
-            angle = angle + 2 * PI;
+            angle = angle + PI_2;
         std::cout<<"angle: "<<(angle*180/PI)<<std::endl;
         return angle;
     }
